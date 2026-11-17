@@ -25,6 +25,7 @@
   MIT license, all text above must be included in any redistribution
  ****************************************************/
 
+#include <time.h>
 #include <SPI.h>
 #include "Adafruit_GFX.h"
 #include "Adafruit_ST7796S_kbv.h"
@@ -40,7 +41,12 @@ Bonezegei_DS1307 rtc(0x68);
 
 const char *ssid = "ARRIS-959D";
 const char *password = "4Ym6jHhd4y7y";
+const char *ntpServer = "pool.ntp.org";
 
+const long gmtOffset_sec = -18000;
+const char *tzInfo = "EST5EDT,M3.2.0,M11.1.0";
+
+bool timeReady = false;
 // Use hardware SPI (on Uno, #13, #12, #11) and the above for CS/DC
 Adafruit_ST7796S_kbv tft = Adafruit_ST7796S_kbv(TFT_CS, TFT_DC, TFT_RST);
 // SoftSPI - note that on some processors this might be *faster* than hardware SPI!
@@ -59,6 +65,7 @@ uint16_t convertHEXto565(uint32_t hexColor) {
 
 void initWifi() {
   WiFi.mode(WIFI_STA);
+  WiFi.config(INADDR_NONE, INADDR_NONE, INADDR_NONE, INADDR_NONE);
   WiFi.setHostname("meow, meow meow");
   WiFi.begin(ssid, password);
   // Auto reconnect is set true as default
@@ -105,15 +112,61 @@ void initWifi() {
   }
 }
 
+void initTime() {
+  // try 3 times
+  Serial.println("[Time] Initializing NTP");
+  int tryCount = 3;
+  while (tryCount != 0) {
+    if (WiFi.status() != WL_CONNECTED) {
+      Serial.println("[Time] Not connected to internet! Retrying...");
+      delay(500);
+      tryCount--;
+      continue;
+    } else {
+      Serial.println("[Time] NTP is ready");
+      timeReady = true;
+      setTime();
+      break;
+    }
+  }
+}
+
+void setTime() {
+  if (!timeReady) return;
+  /* struct tm timeinfo;
+  getLocalTime(&timeinfo); */
+  // TODO: Ask nist time servers;
+  int hour = timeinfo.tm_hour;
+  int minute = timeinfo.tm_min;
+  int second = timeinfo.tm_sec;
+
+  int month = timeinfo.tm_mon + 1;
+  int day = timeinfo.tm_mday;
+  int year = timeinfo.tm_year;
+  Serial.print(hour);
+  Serial.print(minute);
+  Serial.print(second);
+  Serial.print(month);
+  Serial.print(day);
+  Serial.print(year);
+
+  char time[16], date[16];
+  sprintf(time, "%02d:%02d:%02d", hour, minute, second);
+  sprintf(date, "%02d/%02d/%02d", month, day, year);
+  rtc.setTime(time);
+  rtc.setDate(date);
+  rtc.setDay(timeinfo.tm_wday);
+}
+
 void setup() {
 //  pinMode(7,OUTPUT);/
 //  digitalWrite(7,HIGH);/
   Serial.begin(9600);
-  Serial.println("ST7796S_kbv Test!"); 
-  tft.begin();
   rtc.begin();
+  tft.begin();
 
   initWifi();
+  initTime();
 }
 
 
